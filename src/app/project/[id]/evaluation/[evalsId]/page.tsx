@@ -7,24 +7,46 @@ import { useAction, useQuery } from "convex/react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { api } from "../../../../../../convex/_generated/api";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Id } from "../../../../../../convex/_generated/dataModel";
 import { useToast } from "@/hooks/use-toast";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 // TODO: Add context
 interface Message {
   role: "system" | "user" | "assistant";
   content: string;
+  expectedResponse?: string;
   evaluationId: Id<"evaluations">;
   projectId: Id<"projects">;
-  // context?: string;
+}
+
+interface Score {
+  _id: Id<"scorer">;
+  _creationTime: number;
+  promptId: Id<"prompts">;
+  modelId: Id<"models">;
+  accuracy: number;
+  completeness: number;
+  coherence: number;
+}
+
+interface EvaluationResult {
+  modelId: Id<"models">;
+  accuracy: number;
+  completeness: number;
+  coherence: number;
 }
 
 export default function EvaluationDashbaord() {
   const params = useParams();
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
+  const [evaluationResults, setEvaluationResults] = useState<
+    EvaluationResult[]
+  >([]);
 
   const sendMessage = useAction(api.llm_chat.chatCompletion);
   const models = useQuery(api.functions.models.list) || [];
@@ -68,7 +90,8 @@ export default function EvaluationDashbaord() {
       }
     }
 
-    sendMessage({ messages: messages });
+    const { evaluationResults } = await sendMessage({ messages: messages });
+    setEvaluationResults(evaluationResults);
   };
 
   return (
@@ -134,33 +157,33 @@ export default function EvaluationDashbaord() {
                 }
               />
             </div>
-            {/* <div className="space-y-1">
-              <Label htmlFor="context">Context</Label>
+            <div className="space-y-1">
+              <Label htmlFor="context">Expected Response</Label>
               <Input
                 name="context"
                 className="border-black"
                 onChange={(e) =>
                   setMessages((prev) => {
-                    const otherMessages = prev.filter(
-                      (p) => p.role !== "context",
-                    );
+                    const otherMessages = prev.filter((p) => p.role !== "user");
                     let updatedMessage: Message | undefined = prev.find(
-                      (p) => p.role === "context",
+                      (p) => p.role === "user",
                     );
                     if (updatedMessage) {
-                      updatedMessage.context = e.target.value;
+                      updatedMessage.expectedResponse = e.target.value;
                     } else {
                       updatedMessage = {
-                        role: "context",
+                        role: "user",
                         content: "",
-                        context: e.target.value,
+                        expectedResponse: e.target.value,
+                        evaluationId: params.evalsId as Id<"evaluations">,
+                        projectId: params.id as Id<"projects">,
                       };
                     }
                     return [...otherMessages, updatedMessage];
                   })
                 }
               />
-            </div> */}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -189,13 +212,28 @@ export default function EvaluationDashbaord() {
             <CardContent className="flex flex-col space-y-3">
               <div className="flex flex-col space-y-2 w-fit md:space-y-0 md:flex-row md:items-center md:justify-end md:space-x-2">
                 <div className="bg-gray-100 text-gray-600 py-1 px-2 rounded-md text-sm font-semibold">
-                  Accuracy
+                  Accuracy:{" "}
+                  {
+                    evaluationResults.find(
+                      (score) => score.modelId === model._id,
+                    )?.accuracy
+                  }
                 </div>
                 <div className="bg-gray-100 text-gray-600 py-1 px-2 rounded-sm text-sm font-semibold">
-                  Relevance
+                  Completeness:{" "}
+                  {
+                    evaluationResults.find(
+                      (score) => score.modelId === model._id,
+                    )?.completeness
+                  }
                 </div>
                 <div className="bg-gray-100 text-gray-600 py-1 px-2 rounded-sm text-sm font-semibold">
-                  Response time
+                  Coherence:{" "}
+                  {
+                    evaluationResults.find(
+                      (score) => score.modelId === model._id,
+                    )?.coherence
+                  }
                 </div>
               </div>
               <div className="space-y-1 bg-gray-100 text-gray-500 font-light p-2">
@@ -206,7 +244,9 @@ export default function EvaluationDashbaord() {
                       key={index}
                       className="bg-gray-100 text-gray-600 py-1 px-2 rounded-sm text-sm font-semibold"
                     >
-                      {response.content}
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {response.content}
+                      </ReactMarkdown>
                     </div>
                   ))}
               </div>

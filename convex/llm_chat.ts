@@ -8,9 +8,17 @@ import { Id } from "./_generated/dataModel";
 interface Message {
   role: "user" | "assistant" | "system";
   content: string;
+  expectedResponse?: string;
   evaluationId: Id<"evaluations">;
   projectId: Id<"projects">;
   // context?: string;
+}
+
+interface EvaluationResult {
+  modelId: Id<"models">;
+  accuracy: number;
+  completeness: number;
+  coherence: number;
 }
 
 export const chatCompletion = action(
@@ -19,13 +27,29 @@ export const chatCompletion = action(
       throw new Error("Messages cannot be empty");
     }
 
+    // Create new prompt using user message
+    const userMessage = messages.find((message) => message.role === "user");
+    if (!userMessage) {
+      throw new Error("User message is required");
+    }
+
+    const promptId: Id<"prompts"> = await ctx.runMutation(
+      api.functions.prompts.create,
+      {
+        userMessage: userMessage.content,
+        projectId: userMessage.projectId,
+      },
+    );
+
     // Saving system and user messages
     for (const message of messages) {
       await ctx.runMutation(api.functions.messages.saveMessage, {
         role: message.role,
         content: message.content,
+        expectedResponse: message.expectedResponse,
         evaluationId: message.evaluationId,
         projectId: message.projectId,
+        promptId: promptId,
       });
     }
 
@@ -41,6 +65,7 @@ export const chatCompletion = action(
           evaluationId: messages[0].evaluationId,
           projectId: messages[0].projectId,
           modelId: model._id,
+          promptId: promptId,
         },
       );
       messageIds[model.name] = messageId;
@@ -61,7 +86,19 @@ export const chatCompletion = action(
       }),
     );
 
-    return { message: "Chat completion successful" };
+    const evaluationResults: EvaluationResult[] = await ctx.runAction(
+      api.llm_evaluator.evaluateResponse,
+      {
+        promptId,
+      },
+    );
+
+    console.debug("Evaluation results", evaluationResults);
+
+    return {
+      message: "Chat completion successful",
+      evaluationResults: evaluationResults as EvaluationResult[],
+    };
   },
 );
 

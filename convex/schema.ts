@@ -31,6 +31,7 @@ export default defineSchema({
     expectedResponse: v.optional(v.string()),
     context: v.optional(v.string()),
     evaluationId: v.id("evaluations"),
+    promptId: v.id("prompts"),
     projectId: v.id("projects"),
     ownerId: v.id("users"),
     modelId: v.optional(v.id("models")),
@@ -40,14 +41,19 @@ export default defineSchema({
     "ownerId",
   ]),
   scorer: defineTable({
-    messageId: v.id("messages"),
+    promptId: v.id("prompts"),
     modelId: v.id("models"),
-    accuracy: v.optional(v.number()),
-    completeness: v.optional(v.number()),
-    coherence: v.optional(v.number()),
-  }).index("by_message_id_model_id", ["messageId", "modelId"]),
+    accuracy: v.number(),
+    completeness: v.number(),
+    coherence: v.number(),
+  }).index("by_prompt_id", ["promptId"]),
   models: defineTable({
     name: v.string(),
     description: v.string(),
+  }),
+  prompts: defineTable({
+    userMessage: v.string(),
+    projectId: v.id("projects"),
+    ownerId: v.id("users"),
   }),
 });

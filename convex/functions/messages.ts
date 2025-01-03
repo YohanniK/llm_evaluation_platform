@@ -31,6 +31,7 @@ export const saveMessage = authenticatedMutation({
     content: v.string(),
     expectedResponse: v.optional(v.string()),
     context: v.optional(v.string()),
+    promptId: v.id("prompts"),
     evaluationId: v.id("evaluations"),
     projectId: v.id("projects"),
     modelId: v.optional(v.id("models")),
@@ -42,6 +43,7 @@ export const saveMessage = authenticatedMutation({
       content,
       expectedResponse,
       context,
+      promptId,
       evaluationId,
       projectId,
       modelId,
@@ -52,6 +54,7 @@ export const saveMessage = authenticatedMutation({
       content,
       expectedResponse,
       context,
+      promptId,
       evaluationId,
       projectId,
       ownerId: ctx.user._id,
@@ -96,5 +99,18 @@ export const updateMessage = internalMutation({
 
     const updatedContent = currentMessage.content + content;
     return await ctx.db.patch(messageId, { content: updatedContent });
+  },
+});
+
+export const fetchMessagesByPromptId = authenticatedQuery({
+  args: {
+    promptId: v.id("prompts"),
+  },
+  handler: async (ctx, { promptId }) => {
+    return await ctx.db
+      .query("messages")
+      .filter((q) => q.eq(q.field("ownerId"), ctx.user._id))
+      .filter((q) => q.eq(q.field("promptId"), promptId))
+      .collect();
   },
 });
